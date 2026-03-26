@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Alpha Research Journal — 알파를 찾는 여정</title>
+  <meta name="description" content="퀀트 알파 연구의 사고 과정, 실패, 발견을 기록한 연구 저널. Cross-dataset interaction부터 425개 시뮬레이션의 교훈까지.">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700;900&family=Noto+Serif+KR:wght@600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+    :root {
+      --bg-toc: #fafaf9;
+      --bg-reader: #ffffff;
+      --bg-tint: #f5f5f4;
+      --text-primary: #1c1917;
+      --text-secondary: #57534e;
+      --text-muted: #a8a29e;
+      --accent: #44403c;
+      --border: #e7e5e4;
+      --border-light: #d6d3d1;
+      --code-bg: #292524;
+      --code-text: #e7e5e4;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-toc);
+      color: var(--text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* ── Progress Bar ── */
+    #progress-bar {
+      position: fixed; top: 0; left: 0; height: 2px; z-index: 9999;
+      background: var(--accent);
+      width: 0%; transition: width 80ms linear;
+      opacity: 0; pointer-events: none;
+    }
+    #progress-bar.visible { opacity: 1; }
+
+    /* ══════════════════════════════════════
+       TOC VIEW
+       ══════════════════════════════════════ */
+    #toc-view {
+      min-height: 100vh;
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    #toc-view.hidden {
+      opacity: 0; pointer-events: none; position: absolute; transform: translateY(-20px);
+    }
+
+    /* Hero */
+    .hero {
+      min-height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; padding: 3rem 2rem;
+    }
+    .hero-inner { max-width: 600px; }
+    .hero-label {
+      display: inline-block; font-size: 0.68rem; letter-spacing: 0.25em;
+      text-transform: uppercase; color: var(--text-muted);
+      margin-bottom: 3rem;
+    }
+    .hero h1 {
+      font-family: 'Noto Serif KR', serif;
+      font-size: clamp(2rem, 5vw, 3rem);
+      font-weight: 700; line-height: 1.4;
+      letter-spacing: -0.03em; margin-bottom: 1rem;
+    }
+    .hero-subtitle {
+      font-size: 1rem; color: var(--text-secondary);
+      font-weight: 300; line-height: 1.8; margin-bottom: 3.5rem;
+    }
+    .hero-meta {
+      display: flex; justify-content: center; gap: 3rem;
+    }
+    .hero-meta-item { text-align: center; }
+    .hero-meta-num {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 2rem; font-weight: 700; color: var(--text-primary);
+      display: block; line-height: 1.2;
+    }
+    .hero-meta-label {
+      font-size: 0.72rem; color: var(--text-muted);
+      letter-spacing: 0.05em; margin-top: 0.25rem; display: block;
+    }
+    .scroll-hint {
+      position: absolute; bottom: 2.5rem; left: 50%; transform: translateX(-50%);
+      color: var(--text-muted); font-size: 0.65rem; letter-spacing: 0.12em;
+      animation: drift 2.5s ease-in-out infinite;
+    }
+    @keyframes drift {
+      0%,100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(6px); }
+    }
+
+    /* Chapter List */
+    .chapter-list-section {
+      max-width: 640px; margin: 0 auto;
+      padding: 0 2rem 6rem;
+    }
+    .part-group { margin-bottom: 3rem; }
+    .part-label {
+      font-size: 0.68rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 1.2rem;
+      padding-bottom: 0.8rem; border-bottom: 1px solid var(--border);
+    }
+    .chapter-item {
+      display: flex; align-items: baseline; gap: 1.5rem;
+      padding: 1rem 0; cursor: pointer;
+      transition: padding-left 0.2s ease, color 0.2s ease;
+    }
+    .chapter-item:hover {
+      padding-left: 0.5rem;
+    }
+    .chapter-item:hover .chapter-title { color: var(--accent); }
+    .chapter-item:hover .chapter-num { color: var(--text-secondary); }
+    .chapter-num {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 1.6rem; font-weight: 700;
+      color: var(--border-light);
+      min-width: 2.5rem; text-align: right;
+      transition: color 0.2s ease;
+      line-height: 1;
+    }
+    .chapter-num.appendix {
+      font-size: 1.1rem;
+      font-family: 'JetBrains Mono', monospace;
+      font-weight: 500;
+    }
+    .chapter-info { flex: 1; }
+    .chapter-title {
+      font-size: 1rem; font-weight: 500;
+      color: var(--text-primary); line-height: 1.5;
+      transition: color 0.2s ease;
+    }
+    .chapter-desc {
+      font-size: 0.82rem; color: var(--text-muted);
+      margin-top: 0.2rem; line-height: 1.5;
+    }
+
+    /* TOC Footer */
+    .toc-footer {
+      max-width: 640px; margin: 0 auto;
+      padding: 2rem 2rem 4rem;
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .toc-footer a {
+      font-size: 0.8rem; color: var(--text-muted);
+      text-decoration: none; transition: color 0.2s;
+    }
+    .toc-footer a:hover { color: var(--accent); }
+    .toc-footer-count {
+      font-size: 0.75rem; color: var(--text-muted);
+    }
+
+    /* ══════════════════════════════════════
+       READER VIEW
+       ══════════════════════════════════════ */
+    #reader-view {
+      display: none; background: var(--bg-reader);
+      min-height: 100vh;
+    }
+    #reader-view.active { display: block; }
+
+    /* Top Bar */
+    .reader-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      background: rgba(255,255,255,0.92); backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      height: 52px; display: flex; align-items: center;
+      padding: 0 1.5rem;
+    }
+    .topbar-back {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-secondary); font-size: 1.1rem;
+      padding: 0.4rem; margin-right: 1rem;
+      transition: color 0.2s; display: flex; align-items: center;
+    }
+    .topbar-back:hover { color: var(--text-primary); }
+    .topbar-title {
+      flex: 1; font-size: 0.85rem; color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .topbar-chapter-num {
+      font-size: 0.78rem; color: var(--text-muted);
+      margin-left: 1rem; white-space: nowrap;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .topbar-toc-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--text-secondary); font-size: 1.1rem;
+      padding: 0.4rem; margin-left: 0.8rem;
+      transition: color 0.2s; display: flex; align-items: center;
+    }
+    .topbar-toc-btn:hover { color: var(--text-primary); }
+
+    /* TOC Drawer */
+    .toc-drawer-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(28,25,23,0.3);
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease;
+    }
+    .toc-drawer-overlay.open { opacity: 1; pointer-events: auto; }
+    .toc-drawer {
+      position: fixed; top: 0; right: 0; bottom: 0; z-index: 201;
+      width: 320px; max-width: 85vw;
+      background: var(--bg-toc); border-left: 1px solid var(--border);
+      transform: translateX(100%); transition: transform 0.3s ease;
+      overflow-y: auto; padding: 1.5rem;
+    }
+    .toc-drawer.open { transform: translateX(0); }
+    .toc-drawer-title {
+      font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+      color: var(--text-muted); margin-bottom: 1.2rem;
+      padding-bottom: 0.8rem; border-bottom: 1px solid var(--border);
+    }
+    .toc-drawer-sep {
+      font-size: 0.65rem; letter-spacing: 0.15em; text-transform: uppercase;
+      color: var(--text-muted); margin-top: 1rem; margin-bottom: 0.5rem;
+      padding-top: 0.5rem; border-top: 1px solid var(--border);
+    }
+    .toc-drawer-item {
+      display: flex; align-items: baseline; gap: 0.8rem;
+      padding: 0.6rem 0.5rem; cursor: pointer;
+      border-radius: 4px; transition: background 0.15s;
+      font-size: 0.88rem; color: var(--text-secondary);
+    }
+    .toc-drawer-item:hover { background: var(--bg-tint); }
+    .toc-drawer-item.active { color: var(--text-primary); font-weight: 500; background: var(--bg-tint); }
+    .toc-drawer-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.75rem; color: var(--text-muted);
+      min-width: 1.5rem; text-align: right;
+    }
+
+    /* Reading Column */
+    .reader-column {
+      max-width: 680px; margin: 0 auto;
+      padding: 80px 2rem 4rem;
+    }
+
+    /* ── Content Typography ── */
+    .reader-content { font-size: 16.5px; line-height: 2.0; color: var(--text-primary); }
+
+    .reader-content h1 {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 2rem; font-weight: 700;
+      margin-top: 3rem; margin-bottom: 1rem;
+      line-height: 1.4; letter-spacing: -0.02em;
+    }
+    .reader-content h1:first-child { margin-top: 0; }
+
+    .reader-content h2 {
+      font-family: 'Noto Serif KR', serif;
+      font-size: 1.5rem; font-weight: 600;
+      margin-top: 2.5rem; margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.4; letter-spacing: -0.01em;
+    }
+
+    .reader-content h3 {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 1.15rem; font-weight: 700;
+      margin-top: 2rem; margin-bottom: 0.8rem;
+      line-height: 1.5;
+    }
+
+    .reader-content h4 {
+      font-family: 'Noto Sans KR', sans-serif;
+      font-size: 1.05rem; font-weight: 700;
+      margin-top: 1.5rem; margin-bottom: 0.6rem;
+      color: var(--text-secondary);
+    }
+
+    .reader-content p { margin-bottom: 1.2rem; }
+    .reader-content strong { font-weight: 700; color: #292524; }
+
+    .reader-content a {
+      color: var(--accent); text-decoration: underline;
+      text-underline-offset: 3px; text-decoration-color: var(--border-light);
+      transition: text-decoration-color 0.2s;
+    }
+    .reader-content a:hover { text-decoration-color: var(--accent); }
+
+    .reader-content blockquote {
+      border-left: 3px solid var(--border-light);
+      padding: 1rem 1.5rem;
+      background: var(--bg-tint);
+      margin: 1.5rem 0;
+      font-style: italic; font-size: 15px;
+      line-height: 1.9;
+      border-radius: 0 6px 6px 0;
+    }
+    .reader-content blockquote p { margin-bottom: 0.5rem; }
+    .reader-content blockquote p:last-child { margin-bottom: 0; }
+
+    .reader-content pre {
+      background: var(--code-bg); color: var(--code-text);
+      padding: 1.5rem; border-radius: 8px;
+      overflow-x: auto; margin: 1.5rem 0;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14px; line-height: 1.7;
+      -webkit-overflow-scrolling: touch;
+    }
+    .reader-content pre code {
+      background: none; padding: 0; font-size: inherit;
+      color: inherit; border-radius: 0;
+    }
+
+    .reader-content code {
+      background: var(--bg-tint);
+      padding: 2px 6px; border-radius: 4px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 14.5px; color: var(--accent);
+    }
+
+    .reader-content table {
+      width: 100%; border-collapse: collapse;
+      margin: 1.5rem 0; font-size: 15px;
+    }
+    .reader-content thead th {
+      background: var(--bg-tint);
+      font-weight: 500; text-align: left;
+      padding: 0.75rem 1rem;
+      border-bottom: 2px solid var(--border);
+      font-size: 0.88rem;
+    }
+    .reader-content tbody td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      line-height: 1.7;
+    }
+    .reader-content tbody tr:last-child td { border-bottom: none; }
+
+    .reader-content ul, .reader-content ol {
+      padding-left: 1.5rem; margin-bottom: 1.2rem;
+    }
+    .reader-content li { margin-bottom: 0.5rem; line-height: 1.9; }
+
+    .reader-content img {
+      max-width: 100%; border-radius: 8px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+      margin: 1.5rem 0;
+    }
+
+    .reader-content hr {
+      border: none; height: 1px;
+      background: var(--border);
+      margin: 2.5rem 0;
+    }
+
+    /* KaTeX */
+    .reader-content .katex-display {
+      margin: 1.5rem 0;
+      padding: 0.8rem 0;
+      overflow-x: auto;
+    }
+
+    /* ── Bottom Navigation ── */
+    .reader-nav-bottom {
+      display: grid; grid-template-columns: 1fr 1fr;
+      gap: 1rem; margin-top: 4rem;
+      padding-top: 2rem; border-top: 1px solid var(--border);
+    }
+    .reader-nav-card {
+      padding: 1.2rem 1.5rem;
+      border: 1px solid var(--border); border-radius: 8px;
+      cursor: pointer; transition: all 0.2s ease;
+      background: var(--bg-reader);
+    }
+    .reader-nav-card:hover {
+      border-color: var(--border-light);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+      transform: translateY(-1px);
+    }
+    .reader-nav-card.prev { text-align: left; }
+    .reader-nav-card.next { text-align: right; }
+    .reader-nav-label {
+      font-size: 0.72rem; color: var(--text-muted);
+      letter-spacing: 0.08em; text-transform: uppercase;
+      margin-bottom: 0.4rem;
+    }
+    .reader-nav-title {
+      font-size: 0.92rem; font-weight: 500;
+      color: var(--text-primary); line-height: 1.5;
+    }
+    .reader-nav-card.empty { visibility: hidden; }
+
+    /* ── Loading ── */
+    .loading-indicator {
+      display: flex; align-items: center; justify-content: center;
+      padding: 6rem 0; color: var(--text-muted);
+      font-size: 0.88rem;
+    }
+    .loading-dot {
+      width: 4px; height: 4px; border-radius: 50%;
+      background: var(--text-muted); margin: 0 3px;
+      animation: pulse 1.2s ease-in-out infinite;
+    }
+    .loading-dot:nth-child(2) { animation-delay: 0.15s; }
+    .loading-dot:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pulse {
+      0%,100% { opacity: 0.3; } 50% { opacity: 1; }
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.8rem; }
+      .hero-meta { gap: 2rem; }
+      .chapter-list-section { padding: 0 1.2rem 4rem; }
+      .chapter-num { font-size: 1.3rem; min-width: 2rem; }
+      .reader-column { padding: 72px 1.2rem 3rem; }
+      .reader-content h1 { font-size: 1.6rem; }
+      .reader-content h2 { font-size: 1.3rem; }
+      .reader-nav-bottom { grid-template-columns: 1fr; }
+      .toc-footer { flex-direction: column; gap: 0.8rem; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<!-- ══════════ TOC VIEW ══════════ -->
+<div id="toc-view">
+  <section class="hero">
+    <div class="hero-inner">
+      <span class="hero-label">Research Journal</span>
+      <h1>알파를 찾는 여정</h1>
+      <p class="hero-subtitle">숫자 뒤에 숨은 구조를 찾아서</p>
+      <div class="hero-meta">
+        <div class="hero-meta-item">
+          <span class="hero-meta-num">21</span>
+          <span class="hero-meta-label">Chapters</span>
+        </div>
+        <div class="hero-meta-item">
+          <span class="hero-meta-num">3</span>
+          <span class="hero-meta-label">Appendices</span>
+        </div>
+      </div>
+    </div>
+    <div class="scroll-hint">SCROLL</div>
+  </section>
+
+  <div class="chapter-list-section" id="chapter-list">
+
+    <!-- Part I -->
+    <div class="part-group">
+      <div class="part-label">Part I &mdash; 출발점</div>
+      <div class="chapter-item" data-ch="1">
+        <span class="chapter-num">01</span>
+        <div class="chapter-info">
+          <div class="chapter-title">알파란 무엇인가</div>
+          <div class="chapter-desc">BRAIN 플랫폼, 제약 조건, 그리고 3000개 종목에서 edge를 찾는다는 것</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="2">
+        <span class="chapter-num">02</span>
+        <div class="chapter-info">
+          <div class="chapter-title">Crowding의 벽</div>
+          <div class="chapter-desc">수만 명이 같은 걸 제출한다 &mdash; 왜 단순한 건 전부 실패하는가</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part II -->
+    <div class="part-group">
+      <div class="part-label">Part II &mdash; 핵심 원리</div>
+      <div class="chapter-item" data-ch="3">
+        <span class="chapter-num">03</span>
+        <div class="chapter-info">
+          <div class="chapter-title">데이터셋이 충돌할 때</div>
+          <div class="chapter-desc">IC가 6배 뛰는 순간 &mdash; Cross-Dataset Interaction의 발견</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="4">
+        <span class="chapter-num">04</span>
+        <div class="chapter-info">
+          <div class="chapter-title">방향 &times; 확인 &times; 체제</div>
+          <div class="chapter-desc">알파의 3축 구조와 체계적 생성 프레임워크</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="5">
+        <span class="chapter-num">05</span>
+        <div class="chapter-info">
+          <div class="chapter-title">8가지 다른 시선</div>
+          <div class="chapter-desc">같은 시장을 읽는 8가지 방법 &mdash; Fusion, Surprise, Disagreement</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="6">
+        <span class="chapter-num">06</span>
+        <div class="chapter-info">
+          <div class="chapter-title">같은 데이터, 다른 수학</div>
+          <div class="chapter-desc">연산자 선택이 필드 선택보다 중요하다</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part III -->
+    <div class="part-group">
+      <div class="part-label">Part III &mdash; 도메인 탐험</div>
+      <div class="chapter-item" data-ch="7">
+        <span class="chapter-num">07</span>
+        <div class="chapter-info">
+          <div class="chapter-title">가격이 '어떻게' 움직이는가</div>
+          <div class="chapter-desc">Microstructure, Volume, 그리고 보이지 않는 주문 흐름</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="8">
+        <span class="chapter-num">08</span>
+        <div class="chapter-info">
+          <div class="chapter-title">공포의 곡선과 변동성 체제</div>
+          <div class="chapter-desc">Options, IV Term Structure, VRP &mdash; 시장의 두려움을 수식으로</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="9">
+        <span class="chapter-num">09</span>
+        <div class="chapter-info">
+          <div class="chapter-title">정보는 누구에게 먼저 도달하는가</div>
+          <div class="chapter-desc">Analyst, Sentiment, Events &mdash; 정보 캐스케이드와 전파 속도</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="10">
+        <span class="chapter-num">10</span>
+        <div class="chapter-info">
+          <div class="chapter-title">숫자 뒤의 진실</div>
+          <div class="chapter-desc">Fundamentals, Earnings Forensics &mdash; 경영진이 보여주고 싶은 것과 진짜</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="11">
+        <span class="chapter-num">11</span>
+        <div class="chapter-info">
+          <div class="chapter-title">편향을 거래하기</div>
+          <div class="chapter-desc">Behavioral Finance &mdash; 처분효과, 앵커링, 손실회피의 수학</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="12">
+        <span class="chapter-num">12</span>
+        <div class="chapter-info">
+          <div class="chapter-title">보이지 않는 연결</div>
+          <div class="chapter-desc">Network, Supply Chain, Industry &mdash; 주식 간의 정보 전파</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part IV -->
+    <div class="part-group">
+      <div class="part-label">Part IV &mdash; 전환점</div>
+      <div class="chapter-item" data-ch="13">
+        <span class="chapter-num">13</span>
+        <div class="chapter-info">
+          <div class="chapter-title">자기 비판: 모든 것이 정적이었다</div>
+          <div class="chapter-desc">460개를 만들고 나서야 깨달은 것 &mdash; rank() 감싸기의 한계</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="14">
+        <span class="chapter-num">14</span>
+        <div class="chapter-info">
+          <div class="chapter-title">전환점을 포착하는 5가지 방법</div>
+          <div class="chapter-desc">Threshold, Pattern, Divergence, Velocity, 정보 밀도</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="15">
+        <span class="chapter-num">15</span>
+        <div class="chapter-info">
+          <div class="chapter-title">Resolution, Lifecycle, Asymmetry</div>
+          <div class="chapter-desc">해소 촉매, 알파의 수명, 비대칭 페이오프 &mdash; 수익의 형태를 설계하다</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="16">
+        <span class="chapter-num">16</span>
+        <div class="chapter-info">
+          <div class="chapter-title">ML 우회로: 왜 단순한 결합이 이기는가</div>
+          <div class="chapter-desc">Conditioning Interface, Economic Time &mdash; 수개월의 딥러닝 연구가 가르쳐 준 것</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="17">
+        <span class="chapter-num">17</span>
+        <div class="chapter-info">
+          <div class="chapter-title">3중 진화의 655개 알파</div>
+          <div class="chapter-desc">Exploiter &times; Challenger &times; Explorer &mdash; ICQ3에서 ICQ6까지</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Part V -->
+    <div class="part-group">
+      <div class="part-label">Part V &mdash; 통합과 실전</div>
+      <div class="chapter-item" data-ch="18">
+        <span class="chapter-num">18</span>
+        <div class="chapter-info">
+          <div class="chapter-title">군중을 읽다</div>
+          <div class="chapter-desc">Crowding Detection &times; Contrarian &mdash; 남들이 뭘 사는지 먼저 파악하기</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="19">
+        <span class="chapter-num">19</span>
+        <div class="chapter-info">
+          <div class="chapter-title">알파의 오케스트라</div>
+          <div class="chapter-desc">Ensemble, Meta-Strategy &mdash; 190개 알파를 하나의 포트폴리오로</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="20">
+        <span class="chapter-num">20</span>
+        <div class="chapter-info">
+          <div class="chapter-title">3 Great Walls</div>
+          <div class="chapter-desc">425개 시뮬레이션, 1.4% 통과율 &mdash; 이론과 실전 사이의 간극</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="21">
+        <span class="chapter-num">21</span>
+        <div class="chapter-info">
+          <div class="chapter-title">현재의 프레임워크, 그리고 다음</div>
+          <div class="chapter-desc">760개 알파의 전체 조감 &mdash; 지금 어디에 서 있는가</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Appendices -->
+    <div class="part-group">
+      <div class="part-label">Appendices</div>
+      <div class="chapter-item" data-ch="a1">
+        <span class="chapter-num appendix">A1</span>
+        <div class="chapter-info">
+          <div class="chapter-title">Operator & Field Reference</div>
+          <div class="chapter-desc">BRAIN 연산자, 필드 매핑, 금지 연산자, 에러 패턴</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="a2">
+        <span class="chapter-num appendix">A2</span>
+        <div class="chapter-info">
+          <div class="chapter-title">검증된 패턴 수식집</div>
+          <div class="chapter-desc">실측 Sharpe/Fitness 포함 &mdash; 즉시 활용 가능한 수식 모음</div>
+        </div>
+      </div>
+      <div class="chapter-item" data-ch="a3">
+        <span class="chapter-num appendix">A3</span>
+        <div class="chapter-info">
+          <div class="chapter-title">학술 참고 문헌</div>
+          <div class="chapter-desc">인용 논문 목록</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="toc-footer">
+    <a href="https://github.com/soccz/worldquant-alpha" target="_blank" rel="noopener">GitHub &nearr;</a>
+    <span class="toc-footer-count">21 chapters + 3 appendices</span>
+  </footer>
+</div>
+
+<!-- ══════════ READER VIEW ══════════ -->
+<div id="reader-view">
+  <div class="reader-topbar">
+    <button class="topbar-back" onclick="goToToc()" aria-label="Back to table of contents">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5"/><path d="M12 19l-7-7 7-7"/></svg>
+    </button>
+    <span class="topbar-title" id="topbar-title"></span>
+    <span class="topbar-chapter-num" id="topbar-num"></span>
+    <button class="topbar-toc-btn" onclick="toggleDrawer()" aria-label="Open chapter list">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+    </button>
+  </div>
+
+  <div class="toc-drawer-overlay" id="drawer-overlay" onclick="toggleDrawer()"></div>
+  <div class="toc-drawer" id="toc-drawer">
+    <div class="toc-drawer-title">Chapters</div>
+    <div id="drawer-list"></div>
+  </div>
+
+  <div class="reader-column">
+    <div class="reader-content" id="reader-content"></div>
+    <div class="reader-nav-bottom" id="reader-nav"></div>
+  </div>
+</div>
+
+<!-- ══════════ SCRIPTS ══════════ -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // For local development, use relative path. For GitHub, change to raw URL.
+  const GITHUB_RAW = 'https://raw.githubusercontent.com/soccz/worldquant-alpha/main/chapters/';
+  const CHAPTERS = [
+    { id: '1',  file: '01_WHAT_IS_ALPHA.md',             title: '알파란 무엇인가',                          label: '01' },
+    { id: '2',  file: '02_CROWDING_WALL.md',              title: 'Crowding의 벽',                            label: '02' },
+    { id: '3',  file: '03_CROSS_DATASET.md',              title: '데이터셋이 충돌할 때',                       label: '03' },
+    { id: '4',  file: '04_SIGNAL_ARCHITECTURE.md',        title: '방향 × 확인 × 체제',                        label: '04' },
+    { id: '5',  file: '05_EIGHT_METHODS.md',              title: '8가지 다른 시선',                           label: '05' },
+    { id: '6',  file: '06_OPERATOR_POWER.md',             title: '같은 데이터, 다른 수학',                     label: '06' },
+    { id: '7',  file: '07_MICROSTRUCTURE.md',             title: '가격이 어떻게 움직이는가',                    label: '07' },
+    { id: '8',  file: '08_OPTIONS_VOLATILITY.md',         title: '공포의 곡선과 변동성 체제',                   label: '08' },
+    { id: '9',  file: '09_INFORMATION_SPEED.md',          title: '정보는 누구에게 먼저 도달하는가',              label: '09' },
+    { id: '10', file: '10_FUNDAMENTALS.md',               title: '숫자 뒤의 진실',                            label: '10' },
+    { id: '11', file: '11_BEHAVIORAL.md',                 title: '편향을 거래하기',                            label: '11' },
+    { id: '12', file: '12_NETWORK.md',                    title: '보이지 않는 연결',                           label: '12' },
+    { id: '13', file: '13_SELF_CRITIQUE.md',              title: '자기 비판: 모든 것이 정적이었다',              label: '13' },
+    { id: '14', file: '14_DYNAMIC_TRANSITION.md',         title: '전환점을 포착하는 5가지 방법',                label: '14' },
+    { id: '15', file: '15_RESOLUTION_LIFECYCLE.md',       title: 'Resolution, Lifecycle, Asymmetry',         label: '15' },
+    { id: '16', file: '16_ML_DETOUR.md',                  title: 'ML 우회로',                                label: '16' },
+    { id: '17', file: '17_MULTI_AGENT.md',                title: '3중 진화의 655개 알파',                      label: '17' },
+    { id: '18', file: '18_CROWDING_CONTRARIAN.md',        title: '군중을 읽다',                               label: '18' },
+    { id: '19', file: '19_ENSEMBLE.md',                   title: '알파의 오케스트라',                          label: '19' },
+    { id: '20', file: '20_THREE_WALLS.md',                title: '3 Great Walls',                            label: '20' },
+    { id: '21', file: '21_CURRENT_FRAMEWORK.md',          title: '현재의 프레임워크, 그리고 다음',              label: '21' },
+    { id: 'a1', file: 'A1_OPERATOR_REFERENCE.md',         title: 'Operator & Field Reference',               label: 'A1' },
+    { id: 'a2', file: 'A2_VALIDATED_FORMULAS.md',         title: '검증된 패턴 수식집',                         label: 'A2' },
+    { id: 'a3', file: 'A3_REFERENCES.md',                 title: '학술 참고 문헌',                            label: 'A3' },
+  ];
+
+  const TOTAL = CHAPTERS.length;
+  const cache = {};
+  let currentId = null;
+
+  // DOM
+  const tocView       = document.getElementById('toc-view');
+  const readerView    = document.getElementById('reader-view');
+  const readerContent = document.getElementById('reader-content');
+  const readerNav     = document.getElementById('reader-nav');
+  const progressBar   = document.getElementById('progress-bar');
+  const topbarTitle   = document.getElementById('topbar-title');
+  const topbarNum     = document.getElementById('topbar-num');
+  const drawerOverlay = document.getElementById('drawer-overlay');
+  const tocDrawer     = document.getElementById('toc-drawer');
+  const drawerList    = document.getElementById('drawer-list');
+
+  // marked config
+  marked.setOptions({
+    gfm: true, breaks: false,
+    headerIds: false, mangle: false,
+  });
+
+  function getIdx(id) { return CHAPTERS.findIndex(c => c.id === String(id)); }
+
+  // Build drawer
+  function buildDrawer() {
+    let html = '';
+    let appendixStarted = false;
+    CHAPTERS.forEach(ch => {
+      if (ch.id.startsWith('a') && !appendixStarted) {
+        html += `<div class="toc-drawer-sep">Appendices</div>`;
+        appendixStarted = true;
+      }
+      html += `<div class="toc-drawer-item" data-ch="${ch.id}">
+        <span class="toc-drawer-num">${ch.label}</span>
+        <span>${ch.title}</span>
+      </div>`;
+    });
+    drawerList.innerHTML = html;
+    drawerList.addEventListener('click', e => {
+      const item = e.target.closest('.toc-drawer-item');
+      if (item) { openChapter(item.dataset.ch); toggleDrawer(); }
+    });
+  }
+
+  function toggleDrawer() {
+    drawerOverlay.classList.toggle('open');
+    tocDrawer.classList.toggle('open');
+  }
+
+  // Open chapter
+  async function openChapter(id) {
+    id = String(id);
+    const idx = getIdx(id);
+    const ch = CHAPTERS[idx];
+    if (!ch) return;
+    currentId = id;
+
+    // UI transition
+    tocView.classList.add('hidden');
+    readerView.classList.add('active');
+    progressBar.classList.add('visible');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+
+    // Update topbar
+    topbarTitle.textContent = ch.title;
+    topbarNum.textContent = `${idx + 1} / ${TOTAL}`;
+
+    // Update drawer active
+    drawerList.querySelectorAll('.toc-drawer-item').forEach(el => {
+      el.classList.toggle('active', el.dataset.ch === id);
+    });
+
+    // URL
+    history.pushState({ ch: id }, '', `?ch=${id}`);
+
+    // Load content
+    if (cache[id]) {
+      renderContent(cache[id]);
+    } else {
+      readerContent.innerHTML = `<div class="loading-indicator"><span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span></div>`;
+      try {
+        const res = await fetch(GITHUB_RAW + encodeURIComponent(ch.file));
+        if (!res.ok) throw new Error(res.status);
+        const md = await res.text();
+        cache[id] = md;
+        if (currentId === id) renderContent(md);
+      } catch(e) {
+        readerContent.innerHTML = `<p style="color:var(--text-muted);text-align:center;padding:4rem 0;">Coming soon.</p>`;
+      }
+    }
+
+    // Bottom nav
+    renderNav(idx);
+  }
+
+  function renderContent(md) {
+    readerContent.innerHTML = marked.parse(md);
+    renderMathInElement(readerContent, {
+      delimiters: [
+        { left: '$$', right: '$$', display: true },
+        { left: '$', right: '$', display: false },
+        { left: '\\[', right: '\\]', display: true },
+        { left: '\\(', right: '\\)', display: false },
+      ],
+      throwOnError: false,
+    });
+  }
+
+  function renderNav(idx) {
+    const prev = idx > 0 ? CHAPTERS[idx - 1] : null;
+    const next = idx < TOTAL - 1 ? CHAPTERS[idx + 1] : null;
+    readerNav.innerHTML = `
+      <div class="reader-nav-card prev ${prev ? '' : 'empty'}" ${prev ? `onclick="openChapter('${prev.id}')"` : ''}>
+        ${prev ? `<div class="reader-nav-label">&#8592; Previous</div><div class="reader-nav-title">${prev.label}. ${prev.title}</div>` : ''}
+      </div>
+      <div class="reader-nav-card next ${next ? '' : 'empty'}" ${next ? `onclick="openChapter('${next.id}')"` : ''}>
+        ${next ? `<div class="reader-nav-label">Next &#8594;</div><div class="reader-nav-title">${next.label}. ${next.title}</div>` : ''}
+      </div>
+    `;
+  }
+
+  // Back to TOC
+  window.goToToc = function() {
+    readerView.classList.remove('active');
+    tocView.classList.remove('hidden');
+    progressBar.classList.remove('visible');
+    progressBar.style.width = '0%';
+    currentId = null;
+    history.pushState(null, '', window.location.pathname);
+  };
+
+  window.openChapter = openChapter;
+
+  // Reading progress
+  window.addEventListener('scroll', () => {
+    if (!readerView.classList.contains('active')) return;
+    const h = document.documentElement.scrollHeight - window.innerHeight;
+    progressBar.style.width = h > 0 ? (window.scrollY / h * 100) + '%' : '0%';
+  });
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (!readerView.classList.contains('active')) return;
+    const idx = getIdx(currentId);
+    if (e.key === 'ArrowRight' && idx < TOTAL - 1) openChapter(CHAPTERS[idx + 1].id);
+    if (e.key === 'ArrowLeft' && idx > 0) openChapter(CHAPTERS[idx - 1].id);
+    if (e.key === 'Escape') {
+      if (tocDrawer.classList.contains('open')) toggleDrawer();
+      else goToToc();
+    }
+  });
+
+  // Chapter item clicks
+  document.getElementById('chapter-list').addEventListener('click', e => {
+    const item = e.target.closest('.chapter-item');
+    if (item) openChapter(item.dataset.ch);
+  });
+
+  // Popstate
+  window.addEventListener('popstate', e => {
+    if (e.state && e.state.ch) openChapter(e.state.ch);
+    else goToToc();
+  });
+
+  // Init
+  buildDrawer();
+  const params = new URLSearchParams(window.location.search);
+  const initCh = params.get('ch');
+  if (initCh !== null) {
+    const idx = getIdx(initCh);
+    if (idx >= 0) openChapter(initCh);
+  }
+})();
+</script>
+</body>
+</html>
